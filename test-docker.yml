@@ -1,0 +1,28 @@
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- task: DockerInstaller@0
+  inputs:
+    dockerVersion: '17.09.0-ce'
+
+- bash: |
+    docker network create -d bridge --attachable --subnet=172.19.0.0/16 --gateway=172.19.0.1 ironpdf-network
+  displayName: 'SETUP ironpdf-network'
+  continueOnError: true
+
+- bash: |
+    docker run --network=ironpdf-network --ip=172.19.0.2 --name=ironpdfengine --hostname=ironpdfengine -d -p $(dockerPortNumber):33350 ironsoftwareofficial/ironpdfengine:2024.2.0-Preview.115
+  displayName: 'RUN ironpdfengine DOCKER'
+# Validate docker container start which limit to 2 minutes
+- script: |
+    echo "Script is starting..."
+    # Add a wait loop to check if the container is running
+    until docker inspect -f '{{.State.Running}}' ironpdfengine | grep -q "true"; do
+      echo "Waiting for the container to start..."
+      sleep 5
+    done
+  displayName: 'Wait for Docker container'
+  timeoutInMinutes: '2'
