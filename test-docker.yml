@@ -19,10 +19,13 @@ steps:
 # Validate docker container start which limit to 2 minutes
 - script: |
     echo "Script is starting..."
+    
     # Add a wait loop to check if the container is running
     until docker inspect -f '{{.State.Running}}' ironpdfengine | grep -q "true"; do
       echo "Waiting for the container to start..."
       sleep 5
     done
+
+    echo "Container is now running. Proceed with further actions."
   displayName: 'Wait for Docker container'
   timeoutInMinutes: '2'
