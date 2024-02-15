@@ -1,31 +1,40 @@
 trigger: none
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: windows-2019
 
 steps:
-- task: DockerInstaller@0
-  inputs:
-    dockerVersion: '17.09.0-ce'
+- powershell: |
+    $PSVersionTable
 
-- bash: |
-    docker network create -d bridge --attachable --subnet=172.19.0.0/16 --gateway=172.19.0.1 ironpdf-network
-  displayName: 'SETUP ironpdf-network'
-  continueOnError: true
+    $baseDirectory = Get-Location
 
-- bash: |
-    docker run --network=ironpdf-network --ip=172.19.0.2 --name=ironpdfengine --hostname=ironpdfengine -d -p $(dockerPortNumber):33350 ironsoftwareofficial/ironpdfengine:2024.2.0-Preview.115
-  displayName: 'RUN ironpdfengine DOCKER'
-# Validate docker container start which limit to 2 minutes
-- script: |
-    echo "Script is starting..."
+    $targetFrameworks = @("netstandard2.0", "net6.0")
+
+    $targetFrameworks | ForEach-Object {
+      # Define what each job does
+      $scriptBlock = {
+        param($framework, $baseDirectory)
+
+        # Example using ipconfig to get network information
+        $command = "ipconfig /all" 
+        $ipConfigOutput = & Invoke-Expression $command
+
+        # Hypothetical: Store output with framework identifier for clarity
+        $outputPath = Join-Path $baseDirectory "ipconfig_$framework.txt"
+        $ipConfigOutput | Out-File $outputPath 
+      }
+
+      # Execute the jobs in parallel
+      Start-Job $scriptBlock -ArgumentList $_, $baseDirectory
+    }
     
-    # Add a wait loop to check if the container is running
-    until docker inspect -f '{{.State.Running}}' ironpdfengine | grep -q "true"; do
-      echo "Waiting for the container to start..."
-      sleep 5
-    done
+    Write-Host "Start network diagnostics on all frameworks in parallel..."
 
-    echo "Container is now running. Proceed with further actions."
-  displayName: 'Wait for Docker container'
-  timeoutInMinutes: '2'
+    Get-Job | Wait-Job
+
+    Get-Job | Receive-Job
+
+    Get-Job | Remove-Job
+
+    Write-Host "Invoke all jobs successfully."
