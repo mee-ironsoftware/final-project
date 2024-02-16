@@ -54,6 +54,8 @@ steps:
           Write-Error $error
         }
       } else {
+        Write-Host "State: $($_.ChildJobs[0].JobStateInfo.State)"
+        Write-Host "Reason: $($_.ChildJobs[0].JobStateInfo.Reason)"
         Receive-Job $_
       }
     }
