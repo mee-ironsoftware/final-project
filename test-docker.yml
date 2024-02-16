@@ -9,6 +9,8 @@ steps:
 
     $baseDirectory = Get-Location
 
+    $jobs = @()
+
     $targetFrameworks = @("netstandard2.0", "net6.0")
 
     $targetFrameworks | ForEach-Object {
@@ -23,17 +25,38 @@ steps:
         # Hypothetical: Store output with framework identifier for clarity
         $outputPath = Join-Path $baseDirectory "ipconfig_$framework.txt"
         $ipConfigOutput | Out-File $outputPath 
+
+        if ($_) {  # Some error happened inside the scriptblock
+          Write-Host "Type of error object: $($_.GetType())" 
+
+          # You might have more work to do to construct a meaningful Exception from $_
+          $exception = $_  # Replace with your logic to create an Exception object
+          $errorRecord = New-Object System.Management.Automation.ErrorRecord $exception, 'ObfuscationFailed', $ErrorActionPreference, $null
+          Throw $errorRecord 
+        }
       }
 
       # Execute the jobs in parallel
-      Start-Job $scriptBlock -ArgumentList $_, $baseDirectory
+      $job = Start-Job $scriptBlock -ArgumentList $_, $baseDirectory
+      $jobs += $job
     }
     
     Write-Host "Start network diagnostics on all frameworks in parallel..."
 
-    Get-Job | Wait-Job
+    $jobs | ForEach-Object {
+      Wait-Job $_
+      if ($_.JobStateInfo.State -eq 'Failed') {
+        Write-Error "Obfuscation job failed"
+        Write-Error "Failed reason: $($_.ChildJobs[0].JobStateInfo.Reason)"
 
-    Get-Job | Receive-Job
+        # Access detailed errors 
+        foreach ($error in $_.ChildJobs[0].Error) {
+          Write-Error $error
+        }
+      } else {
+        Receive-Job $_
+      }
+    }
 
     Get-Job | Remove-Job
 
